@@ -1,62 +1,58 @@
 # app.py
+# app.py
 import streamlit as st
-import pandas as pd
-from utils.parser import parse_log_file
-from utils.visuals import plot_timeline, plot_counts, plot_alarm_trends
 
-st.set_page_config(page_title="Toll/ITS Log Analyzer", layout="wide")
+# Safe imports with error handling
+try:
+    import pandas as pd
+    import numpy as np
+except ModuleNotFoundError as e:
+    st.error(f"Missing package: {e.name}. Please add it to requirements.txt")
+    raise
 
-st.title("🚦 Toll/ITS Log Analyzer")
-st.markdown("Upload a log file to visualize alarms, severity, and trends.")
+try:
+    from utils.parser import parse_logs
+except ModuleNotFoundError:
+    st.error("utils.parser module not found")
+    raise
 
-# File upload
-uploaded_file = st.file_uploader("Choose a log file", type=["txt", "log"])
+try:
+    from utils.visuals import plot_timeline, plot_counts, plot_alarm_trends
+except ModuleNotFoundError:
+    st.warning("utils.visuals module missing or Plotly not installed")
+    plot_timeline = plot_counts = plot_alarm_trends = None
+
+st.set_page_config(page_title="Logs Analyser 4-in-1", layout="wide")
+
+st.title("📊 Logs Analyser 4-in-1")
+
+uploaded_file = st.file_uploader("Upload log file", type=["log", "txt", "csv"])
 
 if uploaded_file:
-    # Save uploaded file temporarily
-    with open("temp_log.txt", "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    
-    # Parse log file
-    df = parse_log_file("temp_log.txt")
-    
-    if df.empty:
-        st.warning("No valid log lines found in the file.")
-    else:
-        st.success(f"Parsed {len(df)} log entries successfully!")
+    try:
+        raw_text = uploaded_file.read().decode("utf-8")
+        logs_df = parse_logs(raw_text)
+        st.success("✅ Logs parsed successfully!")
         
-        # Show raw DataFrame
-        with st.expander("📄 Raw Data"):
-            st.dataframe(df)
-        
-        # Sidebar filters
-        st.sidebar.header("Filter Logs")
-        devices = df["Device"].unique()
-        selected_devices = st.sidebar.multiselect("Select Devices", devices, default=devices)
-        
-        severities = df["Severity"].unique()
-        selected_severities = st.sidebar.multiselect("Select Severity", severities, default=severities)
-        
-        filtered_df = df[df["Device"].isin(selected_devices) & df["Severity"].isin(selected_severities)]
-        
-        st.subheader("📊 Alarm Timeline")
-        timeline_fig = plot_timeline(filtered_df)
-        st.plotly_chart(timeline_fig, use_container_width=True)
-        
-        st.subheader("📊 Severity Counts")
-        counts_fig = plot_counts(filtered_df)
-        st.plotly_chart(counts_fig, use_container_width=True)
-        
-        st.subheader("📈 Alarm Trends Over Time")
-        freq_option = st.selectbox("Trend Frequency", options=["Daily", "Weekly", "Monthly"])
-        freq_map = {"Daily": "D", "Weekly": "W", "Monthly": "M"}
-        trend_fig = plot_alarm_trends(filtered_df, freq=freq_map[freq_option])
-        st.plotly_chart(trend_fig, use_container_width=True)
-        try:
-    import plotly.express as px
-except ModuleNotFoundError:
-    import streamlit as st
-    st.error("Plotly is missing. Add `plotly` to requirements.txt and redeploy.")
+        st.subheader("Preview of logs")
+        st.dataframe(logs_df.head(10))
+
+        if plot_timeline:
+            st.subheader("Timeline plot")
+            st.plotly_chart(plot_timeline(logs_df), use_container_width=True)
+
+        if plot_counts:
+            st.subheader("Counts plot")
+            st.plotly_chart(plot_counts(logs_df), use_container_width=True)
+
+        if plot_alarm_trends:
+            st.subheader("Alarm trends")
+            st.plotly_chart(plot_alarm_trends(logs_df), use_container_width=True)
+    except Exception as e:
+        st.error(f"Error parsing file: {str(e)}")
+else:
+    st.info("Upload a log file to get started.")
+
 
 
 
