@@ -1,42 +1,30 @@
 
 # app.py
-# app.py
 import streamlit as st
-import pandas as pd
-from parser import parse_logs, parse_alarm_summary
+from parser import parse_logs
 
-st.set_page_config(page_title="🚦 Tolling System Log Parser", layout="wide")
+st.title("🚦 Tolling System VDC Log Parser")
 
-st.title("🚦 Tolling System Log Parser")
+option = st.radio("Choose input method:", ["Upload File", "Paste Logs"])
 
-# Input choice
-choice = st.radio("Choose input method:", ["Upload File", "Paste Logs"])
-
-logs = ""
-
-if choice == "Upload File":
+if option == "Upload File":
     uploaded_file = st.file_uploader("Upload log file", type=["txt", "log"])
-    if uploaded_file is not None:
-        # Read full file content
-        logs = uploaded_file.read().decode("utf-8", errors="ignore")
-elif choice == "Paste Logs":
-    logs = st.text_area("Paste logs here:")
+    if uploaded_file:
+        content = uploaded_file.read().decode("utf-8", errors="ignore")
+        df = parse_logs(content)
+        if df.empty:
+            st.warning("⚠️ No matching log entries found.")
+        else:
+            st.success(f"✅ Parsed {len(df)} log entries")
+            st.dataframe(df, use_container_width=True)
 
-# Process logs if provided
-if logs.strip():
-    with st.spinner("Parsing logs..."):
-        df_logs = parse_logs(logs)
-        df_alarms = parse_alarm_summary(logs)
+elif option == "Paste Logs":
+    logs = st.text_area("Paste your logs here")
+    if logs:
+        df = parse_logs(logs)
+        if df.empty:
+            st.warning("⚠️ No matching log entries found.")
+        else:
+            st.success(f"✅ Parsed {len(df)} log entries")
+            st.dataframe(df, use_container_width=True)
 
-    if not df_logs.empty:
-        st.subheader("📜 Parsed Log Entries")
-        st.dataframe(df_logs, use_container_width=True)
-        st.download_button("📥 Download Logs CSV", df_logs.to_csv(index=False), "parsed_logs.csv")
-
-    if not df_alarms.empty:
-        st.subheader("🚨 Alarm Summary")
-        st.dataframe(df_alarms, use_container_width=True)
-        st.download_button("📥 Download Alarm CSV", df_alarms.to_csv(index=False), "alarms.csv")
-
-    if df_logs.empty and df_alarms.empty:
-        st.warning("No recognizable log entries found.")
