@@ -52,6 +52,12 @@ if uploaded_file:
         freq_map = {"Daily": "D", "Weekly": "W", "Monthly": "M"}
         trend_fig = plot_alarm_trends(filtered_df, freq=freq_map[freq_option])
         st.plotly_chart(trend_fig, use_container_width=True)
+        try:
+    import plotly.express as px
+except ModuleNotFoundError:
+    import streamlit as st
+    st.error("Plotly is missing. Add `plotly` to requirements.txt and redeploy.")
+
 
 
 
