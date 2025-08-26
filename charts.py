@@ -1,7 +1,5 @@
 # charts.py
 
-pip install plotly
-import plotly.express as px
 
 import pandas as pd
 import plotly.express as px
