@@ -1,34 +1,53 @@
+# utils/visuals.py
 import plotly.express as px
 import pandas as pd
 
-def plot_timeline(df, time_col="Raise Date", severity_col="Severity"):
+def plot_timeline(df: pd.DataFrame):
     """
-    Creates a timeline chart of log events by severity.
+    Plot timeline of alarms/events per device over time
     """
-    df = df.dropna(subset=[time_col])
-    fig = px.scatter(df, x=time_col, y=severity_col, color=severity_col,
-                     title="Timeline of Events", hover_data=["Message", "Device Name", "File"])
-    fig.update_traces(marker=dict(size=10))
-    fig.update_layout(height=400)
+    if df.empty:
+        return {}
+    fig = px.scatter(
+        df,
+        x="Timestamp",
+        y="Device",
+        color="Severity",
+        hover_data=["Message", "File", "LineNo"],
+        title="Device Alarm Timeline"
+    )
+    fig.update_layout(yaxis={'categoryorder':'total ascending'})
     return fig
 
-def plot_counts(df, severity_col="Severity"):
+def plot_counts(df: pd.DataFrame):
     """
-    Creates a bar chart of counts per severity.
+    Plot counts of severity levels
     """
-    count_df = df.groupby(severity_col).size().reset_index(name="Count")
-    fig = px.bar(count_df, x=severity_col, y="Count", color=severity_col,
-                 title="Count of Events by Severity", text="Count")
-    fig.update_layout(height=400)
+    if df.empty:
+        return {}
+    counts = df.groupby("Severity").size().reset_index(name="Count")
+    fig = px.bar(
+        counts,
+        x="Severity",
+        y="Count",
+        color="Severity",
+        title="Severity Counts",
+        text="Count"
+    )
     return fig
 
-def draw_root_cause_diagram(df, msg_col="Message"):
+def plot_alarm_trends(df: pd.DataFrame, freq="D"):
     """
-    Creates a simple root cause diagram (top 10 recurring messages).
+    Plot alarm trends over time.
+    freq: 'D' = daily, 'W' = weekly, 'M' = monthly
     """
-    top_msgs = df[msg_col].value_counts().nlargest(10).reset_index()
-    top_msgs.columns = ["Root Cause", "Count"]
-    fig = px.bar(top_msgs, x="Root Cause", y="Count", color="Count",
-                 title="Top 10 Root Causes", text="Count")
-    fig.update_layout(height=400, xaxis_tickangle=-45)
+    if df.empty:
+        return {}
+    trend_df = df.set_index("Timestamp").resample(freq).size().reset_index(name="Count")
+    fig = px.line(
+        trend_df,
+        x="Timestamp",
+        y="Count",
+        title=f"Alarms Trend ({'Daily' if freq=='D' else 'Weekly' if freq=='W' else 'Monthly'})"
+    )
     return fig
