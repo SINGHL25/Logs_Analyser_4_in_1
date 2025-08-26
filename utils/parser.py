@@ -1,59 +1,49 @@
-import re
+# utils/parser.py
 import pandas as pd
+import re
+from datetime import datetime
 
-def parse_log_file(lines):
+LOG_PATTERN = re.compile(
+    r'(?P<Timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+'
+    r'(?P<Device>\w+)\s+'
+    r'(?P<File>\S+)\s+'
+    r'(?P<LineNo>\d+)\s+'
+    r'(?P<Message>.+?)\s+'
+    r'(?P<SystemCode>\d+)\s+'
+    r'(?P<Additional>.*)'
+)
+
+def parse_log_file(file_path: str) -> pd.DataFrame:
     """
-    Parses log lines into a structured DataFrame.
-    Supports TSMC, ALC, VRS style logs.
+    Parse log file and return structured DataFrame.
+    Columns: Timestamp, Device, File, LineNo, Message, SystemCode, Additional, Severity
     """
     records = []
-    for line in lines:
-        line = line.strip("~|[] \n")
-        if not line:
-            continue
-
-        # Generic regex for logs
-        match = re.match(
-            r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+)\s+"   # Timestamp
-            r"([A-Z])\s+"                                       # Severity
-            r"(\S+)\s+"                                         # PID/Process
-            r"(\S+)\s+"                                         # Device/Module
-            r"(\S+)\s+"                                         # File
-            r"L(\d+)\s*"                                        # Line
-            r"(?:([^\t]+)\t)?"                                  # Optional code/version
-            r"(.*)", line)
-        if match:
-            ts, lvl, pid, device, file, line_no, code, msg = match.groups()
-            records.append({
-                "Raise Date": pd.to_datetime(ts, errors="coerce"),
-                "Severity": lvl,
-                "PID": pid,
-                "Device Name": device,
-                "File": file,
-                "Line No": line_no,
-                "Code": code if code else "",
-                "Message": msg
-            })
-        else:
-            # Fallback for unmatched lines
-            records.append({
-                "Raise Date": None,
-                "Severity": "",
-                "PID": "",
-                "Device Name": "",
-                "File": "",
-                "Line No": "",
-                "Code": "",
-                "Message": line
-            })
-
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            match = LOG_PATTERN.match(line)
+            if match:
+                record = match.groupdict()
+                # Convert timestamp
+                try:
+                    record["Timestamp"] = pd.to_datetime(record["Timestamp"])
+                except Exception:
+                    continue
+                # Extract severity from message (simple rule)
+                msg_upper = record["Message"].upper()
+                if "ERROR" in msg_upper:
+                    record["Severity"] = "Error"
+                elif "WARN" in msg_upper:
+                    record["Severity"] = "Warning"
+                elif "ALARM" in msg_upper:
+                    record["Severity"] = "Alarm"
+                else:
+                    record["Severity"] = "Info"
+                
+                records.append(record)
     df = pd.DataFrame(records)
     return df
 
-def extract_alarm_events(df):
-    """
-    Filters the logs to extract alarms/events.
-    """
-    df = df.copy()
-    df['is_alarm'] = df['Message'].str.contains(r'Error|Fail|Alarm|CT:', case=False, na=False)
-    return df[df['is_alarm']].reset_index(drop=True)
